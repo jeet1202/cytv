@@ -16,12 +16,13 @@
     <!-- Cinematic top shelf (cinematic_home): the focused dock app's artwork, a few pixels across and
          stretched over the screen, which softens it like a blur without the cost of one. Hidden otherwise. -->
     <ImageView
-    android:id="@+id/defaultWallpaper"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:src="@drawable/default_wallpaper"
-    android:scaleType="centerCrop"
-    android:importantForAccessibility="no" />
+        android:id="@+id/heroArt"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:alpha="0"
+        android:visibility="gone"
+        android:importantForAccessibility="no" />
 
     <!-- Ambient glow in the colour of the focused dock app. -->
     <View
@@ -325,7 +326,7 @@
                     style="@style/TopButton"
                     android:text="@string/inputs"
                     android:drawableStart="@drawable/ic_input"
-                    android:nextFocusDown="@+id/grid" />
+                    android:nextFocusDown="@+id/btnPlaylist" />
 
                 <TextView
                     android:id="@+id/btnWifi"
@@ -335,7 +336,7 @@
                     android:ellipsize="end"
                     android:text="@string/wifi"
                     android:drawableStart="@drawable/ic_wifi"
-                    android:nextFocusDown="@+id/grid" />
+                    android:nextFocusDown="@+id/btnPlaylist" />
 
                 <TextView
                     android:id="@+id/btnVpn"
@@ -343,14 +344,14 @@
                     android:visibility="gone"
                     android:singleLine="true"
                     android:text="@string/vpn"
-                    android:nextFocusDown="@+id/grid" />
+                    android:nextFocusDown="@+id/btnPlaylist" />
 
                 <TextView
                     android:id="@+id/btnReorder"
                     style="@style/TopButtonIcon"
                     android:contentDescription="@string/reorder"
                     android:drawableStart="@drawable/ic_swap_vert"
-                    android:nextFocusDown="@+id/grid" />
+                    android:nextFocusDown="@+id/btnPlaylist" />
 
                 <TextView
                     android:id="@+id/btnLibraryTop"
@@ -358,15 +359,29 @@
                     android:visibility="gone"
                     android:contentDescription="@string/app_library"
                     android:drawableStart="@drawable/ic_apps_pill"
-                    android:nextFocusDown="@+id/grid" />
+                    android:nextFocusDown="@+id/btnPlaylist" />
 
                 <TextView
                     android:id="@+id/btnSettings"
                     style="@style/TopButton"
                     android:text="@string/settings"
                     android:drawableStart="@drawable/ic_settings"
-                    android:nextFocusDown="@+id/grid" />
+                    android:nextFocusDown="@+id/btnPlaylist" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/btnPlaylist"
+                style="@style/TopButton"
+                android:layout_alignParentEnd="true"
+                android:layout_below="@id/topButtons"
+                android:layout_marginTop="4dp"
+                android:maxWidth="200dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:text="@string/playlist"
+                android:drawableStart="@drawable/ic_youtube"
+                android:nextFocusUp="@+id/btnWifi"
+                android:nextFocusDown="@+id/grid" />
         </RelativeLayout>
 
         <!-- The wrapper clips at the grid's edge; the grid itself must not clip so scaled tiles can overflow their cells. -->
