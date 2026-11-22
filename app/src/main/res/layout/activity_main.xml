@@ -323,11 +323,20 @@
                 android:orientation="horizontal">
 
                 <TextView
+                    android:id="@+id/btnPlaylist"
+                    style="@style/TopButton"
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:text="@string/playlist"
+                    android:drawableStart="@drawable/ic_youtube"
+                    android:nextFocusDown="@+id/grid" />
+
+                <TextView
                     android:id="@+id/btnInputs"
                     style="@style/TopButton"
                     android:text="@string/inputs"
                     android:drawableStart="@drawable/ic_input"
-                    android:nextFocusDown="@+id/btnPlaylist" />
+                    android:nextFocusDown="@+id/grid" />
 
                 <TextView
                     android:id="@+id/btnWifi"
@@ -337,7 +346,7 @@
                     android:ellipsize="end"
                     android:text="@string/wifi"
                     android:drawableStart="@drawable/ic_wifi"
-                    android:nextFocusDown="@+id/btnPlaylist" />
+                    android:nextFocusDown="@+id/grid" />
 
                 <TextView
                     android:id="@+id/btnVpn"
@@ -345,14 +354,14 @@
                     android:visibility="gone"
                     android:singleLine="true"
                     android:text="@string/vpn"
-                    android:nextFocusDown="@+id/btnPlaylist" />
+                    android:nextFocusDown="@+id/grid" />
 
                 <TextView
                     android:id="@+id/btnReorder"
                     style="@style/TopButtonIcon"
                     android:contentDescription="@string/reorder"
                     android:drawableStart="@drawable/ic_swap_vert"
-                    android:nextFocusDown="@+id/btnPlaylist" />
+                    android:nextFocusDown="@+id/grid" />
 
                 <TextView
                     android:id="@+id/btnLibraryTop"
@@ -360,29 +369,15 @@
                     android:visibility="gone"
                     android:contentDescription="@string/app_library"
                     android:drawableStart="@drawable/ic_apps_pill"
-                    android:nextFocusDown="@+id/btnPlaylist" />
+                    android:nextFocusDown="@+id/grid" />
 
                 <TextView
                     android:id="@+id/btnSettings"
                     style="@style/TopButton"
                     android:text="@string/settings"
                     android:drawableStart="@drawable/ic_settings"
-                    android:nextFocusDown="@+id/btnPlaylist" />
+                    android:nextFocusDown="@+id/grid" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/btnPlaylist"
-                style="@style/TopButton"
-                android:layout_alignParentEnd="true"
-                android:layout_below="@id/topButtons"
-                android:layout_marginTop="4dp"
-                android:maxWidth="200dp"
-                android:singleLine="true"
-                android:ellipsize="end"
-                android:text="@string/playlist"
-                android:drawableStart="@drawable/ic_youtube"
-                android:nextFocusUp="@+id/btnWifi"
-                android:nextFocusDown="@+id/grid" />
         </RelativeLayout>
 
         <!-- The wrapper clips at the grid's edge; the grid itself must not clip so scaled tiles can overflow their cells. -->
