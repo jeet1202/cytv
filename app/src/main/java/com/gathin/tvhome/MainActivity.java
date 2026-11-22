@@ -152,6 +152,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private View hero;
     private TextView heroMeta;
     private LinearLayout heroDots;
+    /** config.xml dock_title: false hides the app name above the dock. */
+    private boolean dockTitle = true;
     /** Cinematic top shelf (config.xml, cinematic_home): the focused dock app's artwork behind a larger shelf. */
     private boolean cinematic;
     /** config.xml ambient_glow, overridable by a theme. Off: the glow view is gone and no fade or colour animator
@@ -542,7 +544,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (cinematic) setUpCinematicShelf(cfg.cinematicScrim);
         // dock_title false: the name above the dock (and the cinematic lines under it) never shows; the glow
         // still follows the dock.
-        if (!cfg.dockTitle) hero.setVisibility(View.GONE);
+        dockTitle = cfg.dockTitle;
+        if (!dockTitle) hero.setVisibility(View.GONE);
         greeting = findViewById(R.id.greeting);
         clockBlock = findViewById(R.id.leftBlock);
         clockRefresh = new ClockRefresh(clockBlock);
@@ -1934,7 +1937,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     // ---- top shelf -------------------------------------------------------------------------------
 
     private void showHero(int position, float dockTopInRoot) {
-        if (!cfg.dockTitle) {
+        if (!dockTitle) {
             hero.setVisibility(View.GONE);
             return;
         }
