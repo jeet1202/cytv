@@ -253,9 +253,9 @@
                         android:format12Hour="EEEE"
                         android:format24Hour="EEEE"
                         android:textColor="#FFFFFFFF"
-                        android:textSize="36sp"
+                        android:textSize="60sp"
                         android:fontFamily="@string/font_anurati"
-                        android:letterSpacing="0.22"
+                        android:letterSpacing="0.18"
                         android:textAllCaps="true"
                         android:includeFontPadding="false" />
 
@@ -264,14 +264,14 @@
                         android:id="@+id/mondDate"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:layout_marginStart="3dp"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginStart="4dp"
                         android:format12Hour="MMMM d, yyyy"
                         android:format24Hour="MMMM d, yyyy"
                         android:textColor="#E6FFFFFF"
-                        android:textSize="14sp"
+                        android:textSize="22sp"
                         android:fontFamily="@string/font_quicksand"
-                        android:letterSpacing="0.22"
+                        android:letterSpacing="0.20"
                         android:textAllCaps="true" />
 
                     <!-- Time: Quicksand Font -->
@@ -279,12 +279,12 @@
                         android:id="@+id/mondTime"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:layout_marginStart="3dp"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginStart="4dp"
                         android:format12Hour="'- 'h:mm a' -'"
                         android:format24Hour="'- 'HH:mm' -'"
                         android:textColor="#CCFFFFFF"
-                        android:textSize="12sp"
+                        android:textSize="18sp"
                         android:fontFamily="@string/font_quicksand"
                         android:letterSpacing="0.16"
                         android:textAllCaps="true" />
