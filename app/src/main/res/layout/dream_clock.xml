@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Screensaver (ClockDream): clock and date that drift around a black screen over an ambient glow. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF000000">
+
+
+    <ImageView
+        android:id="@+id/dreamAmbient"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:importantForAccessibility="no" />
+
+    <LinearLayout
+        android:id="@+id/dreamContent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <!-- Mond Day: Anurati -->
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="EEEE"
+            android:format24Hour="EEEE"
+            android:textColor="#FFFFFFFF"
+            android:textSize="76sp"
+            android:fontFamily="@string/font_anurati"
+            android:letterSpacing="0.22"
+            android:textAllCaps="true"
+            android:includeFontPadding="false" />
+
+        <!-- Mond Date: Quicksand -->
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:format12Hour="MMMM d, yyyy"
+            android:format24Hour="MMMM d, yyyy"
+            android:textColor="#E6FFFFFF"
+            android:textSize="22sp"
+            android:fontFamily="@string/font_quicksand"
+            android:letterSpacing="0.24"
+            android:textAllCaps="true" />
+
+        <!-- Mond Time: Quicksand -->
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:format12Hour="'- 'h:mm a' -'"
+            android:format24Hour="'- 'HH:mm' -'"
+            android:textColor="#CCFFFFFF"
+            android:textSize="18sp"
+            android:fontFamily="@string/font_quicksand"
+            android:letterSpacing="0.16"
+            android:textAllCaps="true" />
+    </LinearLayout>
+</FrameLayout>
