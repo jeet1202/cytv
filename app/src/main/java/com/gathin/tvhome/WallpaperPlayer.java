@@ -187,6 +187,28 @@ final class WallpaperPlayer {
         }
     }
 
+    private final Runnable loopWatchdog = new Runnable() {
+        @Override
+        public void run() {
+            if (active && videoFile != null && videoSurface != null && videoSurface.isValid()) {
+                if (mediaPlayer != null && videoPrepared) {
+                    try {
+                        if (!mediaPlayer.isPlaying()) {
+                            mediaPlayer.seekTo(0);
+                            mediaPlayer.start();
+                        }
+                    } catch (Exception e) {
+                        stopVideo();
+                        startVideo();
+                    }
+                } else if (mediaPlayer == null) {
+                    startVideo();
+                }
+                root.postDelayed(this, 1500);
+            }
+        }
+    };
+
     private void startVideo() {
         if (videoFile == null || videoSurface == null || !videoSurface.isValid() || closed) return;
         try {
@@ -194,7 +216,7 @@ final class WallpaperPlayer {
                 mediaPlayer = new MediaPlayer();
                 mediaPlayer.setDataSource(videoFile.getAbsolutePath());
                 mediaPlayer.setSurface(videoSurface);
-                mediaPlayer.setLooping(true);
+                mediaPlayer.setLooping(false);
                 mediaPlayer.setVolume(0f, 0f);
                 mediaPlayer.setOnVideoSizeChangedListener((mp, vw, vh) -> updateTextureMatrix(vw, vh));
                 mediaPlayer.setOnPreparedListener(mp -> {
@@ -211,7 +233,10 @@ final class WallpaperPlayer {
                         try {
                             mp.seekTo(0);
                             mp.start();
-                        } catch (Exception ignored) {}
+                        } catch (Exception e) {
+                            stopVideo();
+                            startVideo();
+                        }
                     }
                 });
                 mediaPlayer.setOnErrorListener((mp, what, extra) -> {
@@ -267,6 +292,8 @@ final class WallpaperPlayer {
 
     void start() {
         active = true;
+        root.removeCallbacks(loopWatchdog);
+        root.postDelayed(loopWatchdog, 1500);
         if (videoFile != null) {
             if (mediaPlayer != null && videoPrepared) {
                 try {
@@ -286,6 +313,7 @@ final class WallpaperPlayer {
 
     void stop() {
         active = false;
+        root.removeCallbacks(loopWatchdog);
         pauseVideo();
     }
 
