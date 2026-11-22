@@ -522,10 +522,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // The glow is one bitmap, so its alpha can be applied while drawing it. Otherwise every frame of
         // a fade renders it into a full-screen offscreen buffer first.
         ambient.forceHasOverlappingRendering(false);
-        ambientGlow = cfg.ambientGlow;
+        ambientGlow = false;
         glowSnap = cfg.glowSnap;
-        appGlow = cfg.appGlow;
-        if (!ambientGlow) ambient.setVisibility(View.GONE);
+        appGlow = false;
+        ambient.setVisibility(View.GONE);
         heroName = findViewById(R.id.heroName);
         hero = findViewById(R.id.hero);
         // The hero is now a group (name, and the cinematic lines): without this every fade of the default
