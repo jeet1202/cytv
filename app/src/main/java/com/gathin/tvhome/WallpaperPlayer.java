@@ -5,11 +5,16 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
+import android.graphics.SurfaceTexture;
+import android.media.MediaPlayer;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.Surface;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -62,6 +67,12 @@ final class WallpaperPlayer {
     private LocalDate sunDay;
     private int[] sun;
 
+    private final File videoFile;
+    private TextureView videoView;
+    private MediaPlayer mediaPlayer;
+    private Surface videoSurface;
+    private boolean videoPrepared;
+
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
         this.root = root;
         backgroundColor = config.backgroundColor;
@@ -91,10 +102,58 @@ final class WallpaperPlayer {
         names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
                 ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
         caption = names.isEmpty() ? null : makeCaption(context, root);
+
+        File dir = Config.dir(context);
+        File vf = dir != null ? new File(dir, "wallpaper.mp4") : null;
+        videoFile = (vf != null && vf.isFile() && vf.length() > 0) ? vf : null;
+
         if (config.wallpaperEnabled && !files.isEmpty()) {
             root.addView(image, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             showFirst();
+        }
+
+        if (videoFile != null) {
+            videoView = new TextureView(context);
+            videoView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+                @Override
+                public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+                    videoSurface = new Surface(surface);
+                    if (mediaPlayer != null) {
+                        try {
+                            mediaPlayer.setSurface(videoSurface);
+                        } catch (Exception ignored) {}
+                    } else if (active) {
+                        startVideo();
+                    }
+                }
+
+                @Override
+                public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+                }
+
+                @Override
+                public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+                    if (videoSurface != null) {
+                        videoSurface.release();
+                        videoSurface = null;
+                    }
+                    if (mediaPlayer != null) {
+                        try {
+                            mediaPlayer.setSurface(null);
+                        } catch (Exception ignored) {}
+                    }
+                    return true;
+                }
+
+                @Override
+                public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+                }
+            });
+            int videoIndex = (config.wallpaperEnabled && !files.isEmpty()) ? 1 : 0;
+            root.addView(videoView, videoIndex, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            root.setBackground(null);
         }
     }
 
@@ -128,17 +187,112 @@ final class WallpaperPlayer {
         }
     }
 
+    private void startVideo() {
+        if (videoFile == null || videoSurface == null || !videoSurface.isValid() || closed) return;
+        try {
+            if (mediaPlayer == null) {
+                mediaPlayer = new MediaPlayer();
+                mediaPlayer.setDataSource(videoFile.getAbsolutePath());
+                mediaPlayer.setSurface(videoSurface);
+                mediaPlayer.setLooping(true);
+                mediaPlayer.setVolume(0f, 0f);
+                mediaPlayer.setOnVideoSizeChangedListener((mp, vw, vh) -> updateTextureMatrix(vw, vh));
+                mediaPlayer.setOnPreparedListener(mp -> {
+                    videoPrepared = true;
+                    if (active) {
+                        try {
+                            mp.start();
+                            image.setVisibility(View.GONE);
+                        } catch (Exception ignored) {}
+                    }
+                });
+                mediaPlayer.setOnCompletionListener(mp -> {
+                    if (active) {
+                        try {
+                            mp.seekTo(0);
+                            mp.start();
+                        } catch (Exception ignored) {}
+                    }
+                });
+                mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                    Log.e("TvHome.Wallpaper", "Video wallpaper error: " + what + ", " + extra);
+                    stopVideo();
+                    image.setVisibility(View.VISIBLE);
+                    return true;
+                });
+                mediaPlayer.prepareAsync();
+            } else if (videoPrepared && !mediaPlayer.isPlaying() && active) {
+                mediaPlayer.start();
+                image.setVisibility(View.GONE);
+            }
+        } catch (Exception e) {
+            Log.e("TvHome.Wallpaper", "startVideo failed", e);
+            image.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void updateTextureMatrix(int videoWidth, int videoHeight) {
+        if (videoView == null || width <= 0 || height <= 0 || videoWidth <= 0 || videoHeight <= 0) return;
+        Matrix matrix = new Matrix();
+        float viewWidth = width;
+        float viewHeight = height;
+        float sx = viewWidth / (float) videoWidth;
+        float sy = viewHeight / (float) videoHeight;
+        float scale = Math.max(sx, sy);
+        matrix.preTranslate((viewWidth - videoWidth) / 2f, (viewHeight - videoHeight) / 2f);
+        matrix.preScale(videoWidth / viewWidth, videoHeight / viewHeight);
+        matrix.postScale(scale, scale, viewWidth / 2f, viewHeight / 2f);
+        videoView.setTransform(matrix);
+    }
+
+    private void pauseVideo() {
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) mediaPlayer.pause();
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private void stopVideo() {
+        videoPrepared = false;
+        if (mediaPlayer != null) {
+            try {
+                mediaPlayer.stop();
+                mediaPlayer.reset();
+                mediaPlayer.release();
+            } catch (Exception ignored) {}
+            mediaPlayer = null;
+        }
+    }
+
     void start() {
         active = true;
-        update();
+        if (videoFile != null) {
+            if (mediaPlayer != null && videoPrepared) {
+                try {
+                    mediaPlayer.start();
+                    image.setVisibility(View.GONE);
+                } catch (Exception e) {
+                    stopVideo();
+                    startVideo();
+                }
+            } else if (videoView != null && videoView.isAvailable()) {
+                startVideo();
+            }
+        } else {
+            update();
+        }
     }
 
     void stop() {
         active = false;
+        pauseVideo();
     }
 
     /** Drops the wallpaper texture when Home is hidden and Android asks the process to free memory. */
     void releaseForMemoryPressure() {
+        stopVideo();
+        image.setVisibility(View.VISIBLE);
         if (current == null) return;
         image.setImageDrawable(null);
         // The renderer may still have a queued frame that references this hardware bitmap. Drop our references and
@@ -162,10 +316,18 @@ final class WallpaperPlayer {
     void close() {
         active = false;
         closed = true;
+        stopVideo();
+        if (videoSurface != null) {
+            try {
+                videoSurface.release();
+            } catch (Exception ignored) {}
+            videoSurface = null;
+        }
         decoder.shutdownNow();
     }
 
     void update() {
+        if (videoFile != null) return;
         if (!active || closed || loading || files.isEmpty()) return;
         String previous = preferences.getString("image", "");
         // A picture outside the time of day's group (the group changed) is replaced at once, not after the interval.
