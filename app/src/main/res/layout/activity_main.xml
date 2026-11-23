@@ -406,11 +406,11 @@
         </FrameLayout>
     </LinearLayout>
 
-    <!-- The single floating glass highlight that springs between tiles. -->
+    <!-- Animated cute chibi black cat focus highlight overlay. -->
     <com.gathin.tvhome.GlassView
         android:id="@+id/glass"
-        android:layout_width="10dp"
-        android:layout_height="10dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:alpha="0"
         android:importantForAccessibility="no" />
 </FrameLayout>

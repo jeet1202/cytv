@@ -1863,6 +1863,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         glassCardRect.set(r);
         glassTargetX = x;
         glassTargetY = y;
+        glass.onCardTarget(r.left, r.top, r.width(), r.height(), glassShown && animations && !reducedMotion);
         // Cinematic shelf: the highlight glows in the dock app's colour, plain white in the grid (and on the dock with
         // cinematic_white_focus). app_glow: every tile. In a single row every tile is the dock's kind.
         boolean coloured = (appGlow || cinematic && !cinematicWhiteFocus && (singleRow || position < COLUMNS)) && !festive;
@@ -2273,6 +2274,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (!glassShown) return;
         glassShown = false;
         glass.animate().cancel();
+        glass.onFocusLost();
         if (animations && !reducedMotion) glass.animate().alpha(0f).setDuration(160).start();
         else glass.setAlpha(0f);
     }

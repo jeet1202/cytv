@@ -1,29 +1,34 @@
 package com.gathin.tvhome;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.RectF;
 import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.LinearInterpolator;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Animated cute chibi black cat focus highlight replacing the old glass slab.
+ * Animated cute chibi black cat focus highlight on a full-screen transparent overlay.
  *
- * - RESTING STATE: Cat hangs from the top rim of the focused card, seen from BEHIND (rear view).
- *   Its front paws hook over the top edge of the card, its glossy black back and ears face the viewer,
- *   its long tail dangles down, and its hind legs actively scratch down against the app logo.
- * - JUMPING STATE: When focus moves between apps, the cat pulls up onto the rim, springs into a
- *   realistic parabolic leap with dynamic flight tilt and stardust sparkle particles, catches the
- *   destination rim, and slips smoothly down into the rear-view hanging pose on the new app.
+ * - RESTING STATE: The cat hangs by its front paws from the focused card's top rim.
+ *   Its back faces the viewer (rear view: fluffy black fur, pointy ears, dangling tail),
+ *   while its hind legs actively scratch down against the app logo with claw marks.
+ * - JUMPING STATE: When focus moves between apps, a dedicated 450ms animation plays:
+ *   1. RUN: Cat pulls up onto the rim and sprints across the card top rim in a gallop stride.
+ *   2. LEAP: Launches into a parabolic mid-air ballistic arc (92dp high) with flight tilt & stardust trail.
+ *   3. CATCH: Reaches paws forward to catch the destination rim.
+ *   4. FALL INTO HANG: Slips over the rim into the rear-view hang and immediately scratches the new logo.
  */
 public class GlassView extends View {
 
@@ -35,7 +40,7 @@ public class GlassView extends View {
     // Cat sprite bitmaps
     private Bitmap bmpHang1;  // Rear view hanging steady
     private Bitmap bmpHang2;  // Rear view hanging with hind legs scratching
-    private Bitmap bmpCrouch; // Coiled crouch / ready
+    private Bitmap bmpCrouch; // Coiled crouch
     private Bitmap bmpRun;    // Extended sprint stride
     private Bitmap bmpLeap;   // Airborne parabolic leap
     private Bitmap bmpCatch;  // Reaching landing catch
@@ -43,20 +48,16 @@ public class GlassView extends View {
     private final float density;
     private int accentColor = 0xFFFFFF;
 
-    // Motion tracking for spring transitions
-    private float prevTransX = Float.NaN;
-    private float prevTransY = Float.NaN;
-    private float smoothVelX = 0f;
-    private float smoothVelY = 0f;
-    private boolean isMoving = false;
-    private long moveStartTime = 0;
-    private long lastAnimTime = 0;
-    private boolean movingRight = true;
+    // Card coordinates on the screen (in root coordinates)
+    private boolean hasTarget = false;
+    private float currLeft, currTop, currWidth, currHeight;
+    private float targetLeft, targetTop, targetWidth, targetHeight;
+    private float prevLeft, prevTop, prevWidth, prevHeight;
 
-    // Jump arc physics
-    private float jumpProgress = 0f; // 0..1 during transition
-    private float totalJumpDist = 0f;
-    private float jumpStartX = 0f;
+    // Jump animation
+    private boolean isJumping = false;
+    private float jumpProgress = 0f; // 0..1
+    private ValueAnimator jumpAnimator;
 
     // Stardust sparkles
     private static class Sparkle {
@@ -72,7 +73,7 @@ public class GlassView extends View {
         density = getResources().getDisplayMetrics().density;
 
         scratchPaint.setStyle(Paint.Style.STROKE);
-        scratchPaint.setStrokeWidth(1.5f * density);
+        scratchPaint.setStrokeWidth(1.8f * density);
         scratchPaint.setColor(0xB3FFFFFF);
         scratchPaint.setStrokeCap(Paint.Cap.ROUND);
 
@@ -89,7 +90,7 @@ public class GlassView extends View {
             bmpCatch = BitmapFactory.decodeResource(getResources(), R.drawable.cat_catch);
         } catch (Throwable ignored) {}
 
-        // Enable hardware acceleration
+        // Full screen hardware-accelerated overlay
         setLayerType(LAYER_TYPE_HARDWARE, null);
     }
 
@@ -102,7 +103,27 @@ public class GlassView extends View {
         }
     }
 
-    /** Compatibility with MainActivity: tints the stardust sparkles / scratch accent. */
+    @Override
+    public void setLayoutParams(ViewGroup.LayoutParams params) {
+        // Enforce full-screen match_parent so the cat can leap freely across the entire TV screen
+        params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+        super.setLayoutParams(params);
+    }
+
+    @Override
+    public void setTranslationX(float translationX) {
+        // Keep the overlay fixed at (0, 0)
+        super.setTranslationX(0f);
+    }
+
+    @Override
+    public void setTranslationY(float translationY) {
+        // Keep the overlay fixed at (0, 0)
+        super.setTranslationY(0f);
+    }
+
+    /** Compatibility with MainActivity: tints stardust / scratch marks. */
     void setAccent(int argb) {
         if (argb != 0) {
             accentColor = argb;
@@ -126,147 +147,226 @@ public class GlassView extends View {
         invalidate();
     }
 
+    /** Called by MainActivity when focus leaves tiles. */
+    public void onFocusLost() {
+        if (jumpAnimator != null && jumpAnimator.isRunning()) {
+            jumpAnimator.cancel();
+        }
+        isJumping = false;
+        sparkles.clear();
+        invalidate();
+    }
+
+    /** Called by MainActivity whenever the focused card changes. */
+    public void onCardTarget(float left, float top, float width, float height, boolean animate) {
+        if (!hasTarget) {
+            // First time: place directly at card
+            hasTarget = true;
+            targetLeft = currLeft = prevLeft = left;
+            targetTop = currTop = prevTop = top;
+            targetWidth = currWidth = prevWidth = width;
+            targetHeight = currHeight = prevHeight = height;
+            isJumping = false;
+            invalidate();
+            return;
+        }
+
+        // Check if target is same
+        if (Math.abs(targetLeft - left) < 2f && Math.abs(targetTop - top) < 2f) {
+            return;
+        }
+
+        // Save previous card location as jump start
+        prevLeft = currLeft;
+        prevTop = currTop;
+        prevWidth = currWidth;
+        prevHeight = currHeight;
+
+        targetLeft = left;
+        targetTop = top;
+        targetWidth = width;
+        targetHeight = height;
+
+        if (!animate) {
+            currLeft = targetLeft;
+            currTop = targetTop;
+            currWidth = targetWidth;
+            currHeight = targetHeight;
+            isJumping = false;
+            invalidate();
+            return;
+        }
+
+        // Start 450ms run-and-jump animation
+        if (jumpAnimator != null && jumpAnimator.isRunning()) {
+            jumpAnimator.cancel();
+        }
+
+        isJumping = true;
+        jumpProgress = 0f;
+        sparkles.clear();
+
+        jumpAnimator = ValueAnimator.ofFloat(0f, 1f);
+        jumpAnimator.setDuration(450);
+        jumpAnimator.setInterpolator(new LinearInterpolator());
+        jumpAnimator.addUpdateListener(anim -> {
+            jumpProgress = (float) anim.getAnimatedValue();
+            invalidate();
+        });
+        jumpAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                isJumping = false;
+                currLeft = targetLeft;
+                currTop = targetTop;
+                currWidth = targetWidth;
+                currHeight = targetHeight;
+                sparkles.clear();
+                invalidate();
+            }
+        });
+        jumpAnimator.start();
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
-        int w = getWidth();
-        int h = getHeight();
-        if (w <= 0 || h <= 0) return;
+        if (!hasTarget) return;
 
         long now = SystemClock.uptimeMillis();
-        float curTransX = getTranslationX();
-        float curTransY = getTranslationY();
 
-        // 1. Detect movement from SpringAnimation
-        if (!Float.isNaN(prevTransX) && !Float.isNaN(prevTransY)) {
-            float dx = curTransX - prevTransX;
-            float dy = curTransY - prevTransY;
-            smoothVelX = smoothVelX * 0.6f + dx * 0.4f;
-            smoothVelY = smoothVelY * 0.6f + dy * 0.4f;
+        if (isJumping) {
+            // ==================== JUMPING CHOREOGRAPHY ====================
+            float t = jumpProgress;
 
-            float speed = (float) Math.hypot(smoothVelX, smoothVelY);
-            if (speed > 1.2f * density) {
-                if (!isMoving) {
-                    isMoving = true;
-                    moveStartTime = now;
-                    movingRight = smoothVelX >= 0;
-                    jumpStartX = prevTransX;
-                    totalJumpDist = Math.max(100f * density, Math.abs(smoothVelX) * 15f);
-                }
-                if (Math.abs(smoothVelX) > 0.5f) {
-                    movingRight = smoothVelX >= 0;
-                }
-            } else {
-                if (isMoving && (now - moveStartTime > 250)) {
-                    isMoving = false;
-                }
-            }
-        }
-        prevTransX = curTransX;
-        prevTransY = curTransY;
-        lastAnimTime = now;
+            float srcCenterX = prevLeft + prevWidth / 2f;
+            float srcRimY = prevTop;
+            float destCenterX = targetLeft + targetWidth / 2f;
+            float destRimY = targetTop;
 
-        // Top rim of card is inset by 6dp pad inside this view
-        float pad = 6f * density;
-        float rimY = pad;
-        float cardCenterX = w / 2f;
-
-        if (isMoving) {
-            // ==================== JUMPING STATE ====================
-            // Calculate jump progress u based on elapsed move time (360ms complete jump)
-            long elapsed = now - moveStartTime;
-            float u = Math.min(1.0f, elapsed / 360f);
-
-            Bitmap sprite;
-            float spriteAngle = 0f;
-            float yOffset = 0f;
+            boolean movingRight = destCenterX >= srcCenterX;
             boolean flip = !movingRight;
 
-            if (u < 0.18f) {
-                // Phase 1: Pull up onto rim & gallop sprint
-                sprite = (u < 0.09f) ? bmpCrouch : bmpRun;
-                yOffset = -rimY; // On top of rim
-                spriteAngle = flip ? 3f : -3f;
-            } else if (u < 0.80f) {
-                // Phase 2: Parabolic mid-air flight
+            // Takeoff point near the edge of the source card
+            float takeoffX = srcCenterX + (movingRight ? 1f : -1f) * (prevWidth * 0.38f);
+            // Landing point near destination rim
+            float landX = destCenterX - (movingRight ? 1f : -1f) * (targetWidth * 0.15f);
+
+            Bitmap sprite;
+            float drawX, drawY;
+            float angle = 0f;
+            String anchor;
+
+            if (t < 0.25f) {
+                // PHASE 1: RIM SPRINT (t: 0..0.25, ~110ms)
+                // Runs along source card top rim towards takeoff edge
+                float s = t / 0.25f;
+                drawX = srcCenterX + (takeoffX - srcCenterX) * (float) Math.pow(s, 1.2);
+                drawY = srcRimY;
+
+                // Alternate gallop strides
+                boolean stride = ((int) (t * 1000 / 45) % 2 == 0);
+                sprite = stride ? bmpRun : bmpCrouch;
+
+                // Sinusoidal gallop bob
+                float bob = -4f * density * (float) Math.abs(Math.sin(Math.PI * 2.5 * s));
+                drawY += bob;
+                angle = flip ? 4f : -4f;
+                anchor = "bottom_center";
+
+            } else if (t < 0.78f) {
+                // PHASE 2: PARABOLIC MID-AIR LEAP (t: 0.25..0.78, ~240ms)
+                float u = (t - 0.25f) / 0.53f; // 0..1 in airborne flight
+                drawX = takeoffX + (landX - takeoffX) * u;
+
+                float apexH = 92f * density;
+                float interpRimY = srcRimY + (destRimY - srcRimY) * u;
+                drawY = interpRimY - 4f * apexH * u * (1f - u);
+
+                // Tangential flight angle: dy/du vs dx
+                float dy = (destRimY - srcRimY) - 4f * apexH * (1f - 2f * u);
+                float dx = landX - takeoffX;
+                float flightAngle = -(float) Math.toDegrees(Math.atan2(dy, dx));
+                angle = flip ? -flightAngle : flightAngle;
+
                 sprite = bmpLeap;
-                float flightU = (u - 0.18f) / 0.62f; // 0..1 in flight
-                float apexH = 88f * density;
-                yOffset = -rimY - 4f * apexH * flightU * (1f - flightU);
+                anchor = "center";
 
-                // Dynamic flight tilt tangent: dy/du
-                float dy = -4f * apexH * (1f - 2f * flightU);
-                float dx = totalJumpDist * (movingRight ? 1f : -1f);
-                float angle = -(float) Math.toDegrees(Math.atan2(dy, dx));
-                spriteAngle = flip ? -angle : angle;
-
-                // Emit stardust sparkles behind tail
-                if (Math.random() < 0.45) {
-                    Sparkle s = new Sparkle();
-                    s.x = cardCenterX + (flip ? 30f * density : -30f * density);
-                    s.y = rimY + yOffset + 20f * density;
-                    s.vx = (float) ((Math.random() - 0.5) * 1.5 * density);
-                    s.vy = (float) ((Math.random() - 0.5) * 1.5 * density);
-                    s.size = (float) (2f * density + Math.random() * 2f * density);
-                    s.alpha = 220;
-                    sparkles.add(s);
+                // Emit glowing stardust sparkles behind tail
+                if (Math.random() < 0.55) {
+                    Sparkle sp = new Sparkle();
+                    sp.x = drawX + (flip ? 32f * density : -32f * density);
+                    sp.y = drawY + 18f * density;
+                    sp.vx = (float) ((Math.random() - 0.5) * 1.5 * density);
+                    sp.vy = (float) ((Math.random() - 0.5) * 1.5 * density);
+                    sp.size = (float) (2.5f * density + Math.random() * 2f * density);
+                    sp.alpha = 240;
+                    sparkles.add(sp);
                 }
-            } else if (u < 0.92f) {
-                // Phase 3: Reach landing rim
+
+            } else if (t < 0.88f) {
+                // PHASE 3: RIM CATCH (t: 0.78..0.88, ~45ms)
+                float s = (t - 0.78f) / 0.10f;
+                drawX = landX + (destCenterX - landX) * s;
+                drawY = destRimY;
+
                 sprite = bmpCatch;
-                yOffset = -rimY * 0.5f;
-                spriteAngle = flip ? 6f : -6f;
+                angle = flip ? 6f : -6f;
+                anchor = "bottom_center";
+
             } else {
-                // Phase 4: Touchdown, slip & fall into rear-view hang
+                // PHASE 4: SLIP & FALL INTO REAR HANG (t: 0.88..1.0, ~55ms)
+                drawX = destCenterX;
+                float fallOvershoot = 6f * density * (1f - (t - 0.88f) / 0.12f);
+                drawY = destRimY + fallOvershoot;
+
                 sprite = bmpHang1;
-                yOffset = 0f;
-                spriteAngle = 0f;
+                angle = 0f;
+                anchor = "rear_hang";
             }
 
-            drawSprite(canvas, sprite, cardCenterX, rimY + yOffset, spriteAngle, flip, "center");
+            // Draw current cat pose
+            drawSprite(canvas, sprite, drawX, drawY, angle, flip, anchor);
 
             // Update & draw sparkles
             for (int i = sparkles.size() - 1; i >= 0; i--) {
-                Sparkle s = sparkles.get(i);
-                s.x += s.vx;
-                s.y += s.vy;
-                s.alpha -= 15;
-                if (s.alpha <= 0) {
+                Sparkle sp = sparkles.get(i);
+                sp.x += sp.vx;
+                sp.y += sp.vy;
+                sp.alpha -= 16;
+                if (sp.alpha <= 0) {
                     sparkles.remove(i);
                 } else {
-                    sparklePaint.setAlpha(s.alpha);
-                    canvas.drawCircle(s.x, s.y, s.size, sparklePaint);
+                    sparklePaint.setAlpha(sp.alpha);
+                    canvas.drawCircle(sp.x, sp.y, sp.size, sparklePaint);
                 }
             }
 
-            postInvalidateOnAnimation();
         } else {
             // ==================== RESTING STATE (REAR VIEW HANG & SCRATCH) ====================
-            // Scratch cycle: alternate between hang 1 and hang 2 every 140ms
-            int frameIdx = (int) ((now / 140) % 4);
+            float centerX = targetLeft + targetWidth / 2f;
+            float rimY = targetTop;
+
+            // Scratch cycle: alternate between hang 1 and hang 2 every 130ms
+            int frameIdx = (int) ((now / 130) % 4);
             boolean isScratching = (frameIdx == 1 || frameIdx == 2);
             Bitmap sprite = isScratching ? bmpHang2 : bmpHang1;
 
-            // Subtle gentle tail pendulum sway (sin wave ~ 2.5 degrees)
+            // Gentle tail sway
             float pendulumAngle = (float) Math.sin(now * 0.005) * 2.5f;
             float bobY = (float) Math.sin(now * 0.008) * 1.5f * density;
 
-            // Draw rear-view hanging cat (front paws hooked over card rim)
-            drawSprite(canvas, sprite, cardCenterX, rimY + bobY, pendulumAngle, false, "rear_hang");
+            // Draw rear-view hanging cat (front paws hooked over rim, back seen)
+            drawSprite(canvas, sprite, centerX, rimY + bobY, pendulumAngle, false, "rear_hang");
 
-            // Draw 2 delicate claw scratch marks on the logo face during scratching
+            // Draw claw scratch marks on logo face during scratching
             if (isScratching && bmpHang2 != null) {
-                float scratchY = rimY + 52f * density;
-                float scratchLen = 10f * density;
-                // Left paw scratch
-                canvas.drawLine(cardCenterX - 7f * density, scratchY, cardCenterX - 10f * density, scratchY + scratchLen, scratchPaint);
-                // Right paw scratch
-                canvas.drawLine(cardCenterX + 8f * density, scratchY, cardCenterX + 5f * density, scratchY + scratchLen, scratchPaint);
+                float scratchY = rimY + 54f * density;
+                float scratchLen = 12f * density;
+                canvas.drawLine(centerX - 8f * density, scratchY, centerX - 11f * density, scratchY + scratchLen, scratchPaint);
+                canvas.drawLine(centerX + 9f * density, scratchY, centerX + 6f * density, scratchY + scratchLen, scratchPaint);
             }
 
-            // Clean up any remaining sparkles
-            sparkles.clear();
-
-            // Next frame for smooth resting scratch animation (20 FPS loop)
+            // Continuous smooth 20 FPS resting scratch loop
             postInvalidateDelayed(50);
         }
     }
@@ -274,11 +374,11 @@ public class GlassView extends View {
     private void drawSprite(Canvas canvas, Bitmap bmp, float cx, float topY, float angle, boolean flip, String anchor) {
         if (bmp == null || bmp.isRecycled()) return;
 
-        // Base scale: cat is nimble chibi scale (~28% of typical 380px card width = ~110px width)
-        float targetW = 112f * density;
+        // Nimble chibi cat scale (~28% of 380px card = ~110px width)
+        float targetW = 114f * density;
         float scale = targetW / (float) bmp.getWidth();
         if ("rear_hang".equals(anchor)) {
-            // Rear hang sprite has narrower width and vertical body
+            // Rear hang sprite has narrower vertical body
             targetW = 62f * density;
             scale = targetW / (float) bmp.getWidth();
         }
@@ -288,7 +388,6 @@ public class GlassView extends View {
         float sw = bmp.getWidth() * scale;
         float sh = bmp.getHeight() * scale;
 
-        // Anchor positioning
         float px, py;
         if ("rear_hang".equals(anchor)) {
             // Front paws hook over top rim by ~8dp
@@ -303,14 +402,12 @@ public class GlassView extends View {
             py = topY - sh;
         }
 
-        // Apply flip
         if (flip) {
             drawMatrix.postScale(-scale, scale, bmp.getWidth() / 2f, bmp.getHeight() / 2f);
         } else {
             drawMatrix.postScale(scale, scale);
         }
 
-        // Apply rotation
         if (Math.abs(angle) > 0.2f) {
             drawMatrix.postRotate(angle, px + sw / 2f, py + sh / 2f);
         }
